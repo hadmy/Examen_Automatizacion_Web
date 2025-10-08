@@ -2,7 +2,10 @@ package com.nttdata.steps;
 
 import com.nttdata.page.HomePage;
 import com.nttdata.page.LoginPage;
+import com.nttdata.page.PopupPage;
 import com.nttdata.page.ProductPage;
+import org.openqa.selenium.By;
+import org.openqa.selenium.Keys;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.interactions.Actions;
@@ -10,6 +13,7 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.time.Duration;
+import java.util.List;
 
 public class ProductStoreStep {
 
@@ -19,7 +23,7 @@ public class ProductStoreStep {
         this.driver = driver;
     }
 
-    public void irALogin(){
+    public void irALogin() {
         this.driver.findElement(HomePage.loginLink).click();
     }
 
@@ -31,50 +35,93 @@ public class ProductStoreStep {
         this.driver.findElement(LoginPage.passInput).sendKeys(password);
     }
 
-    public void login(){
+    public void buttonLogin() {
         this.driver.findElement(LoginPage.loginButton).click();
     }
 
-    /*public void navegarACategoriaYSubcategoria(String categoria, String subcategoria) {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
+    public void validarLoginExitoso() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+
+        boolean loginFallido = driver.findElements(LoginPage.errorMessage).size() > 0;
+        if (loginFallido) {
+            String mensajeError = driver.findElement(LoginPage.errorMessage).getText();
+            throw new AssertionError("Error al iniciar sesion " + mensajeError);
+        }
+
+        wait.until(ExpectedConditions.visibilityOfElementLocated(HomePage.userInfo));
+    }
+
+    public void selectCategoria(String categoria) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+
+        // Intentamos encontrar la categoría
+        List<WebElement> categorias = driver.findElements(HomePage.categoriaMenu(categoria));
+
+        if (categorias.isEmpty()) {
+            throw new AssertionError("Categoria no existe.");
+        }
+
+        WebElement categoriaElemento = wait.until(ExpectedConditions
+                .visibilityOfElementLocated(HomePage.categoriaMenu(categoria)));
+
         Actions actions = new Actions(driver);
-
-        WebElement categoriaElemento = wait.until(ExpectedConditions.visibilityOfElementLocated(HomePage.categoriaMenu(categoria)));
         actions.moveToElement(categoriaElemento).perform();
+    }
 
-        //wait.until(ExpectedConditions.visibilityOfElementLocated(HomePage.subCategoriaMenu(subcategoria)));
+    public void selectSubCategoria(String subcategoria) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        WebElement subCategoriaElemento = wait.until(ExpectedConditions
+                .elementToBeClickable(HomePage.subCategoriaMenu(subcategoria)));
 
-        WebElement subCategoriaElemento = driver.findElement(HomePage.subCategoriaMenu(subcategoria));
         subCategoriaElemento.click();
     }
 
-    public void agregarProductoAlCarrito(int cantidad) {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
-
-        WebElement primerProducto = wait.until(ExpectedConditions.visibilityOfElementLocated(HomePage.productoLink));
+    public void selectPrimerProducto() {
+        WebElement primerProducto = driver.findElement(ProductPage.productoLink);
         primerProducto.click();
+    }
 
-        //wait.until(ExpectedConditions.visibilityOfElementLocated(By.cssSelector("input#quantity_wanted")));
+    public void typeCantidad(int cantidad) {
+        WebElement cantidadProducto = driver.findElement(ProductPage.quantityInput);
+        cantidadProducto.sendKeys(Keys.CONTROL + "a");
+        cantidadProducto.sendKeys(Keys.DELETE);
+        cantidadProducto.sendKeys(String.valueOf(cantidad));
+    }
 
-        WebElement inputCantidad = driver.findElement(ProductPage.quantityInput);
-        inputCantidad.clear();
-        inputCantidad.sendKeys("");
-        inputCantidad.sendKeys(String.valueOf(cantidad));
-
-        // Clic en el botón "Añadir al carrito"
-        WebElement botonAgregar = driver.findElement(By.cssSelector("button.add-to-cart"));
+    public void buttonAgregar() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        WebElement botonAgregar = wait.until(ExpectedConditions.elementToBeClickable(ProductPage.agregarButton));
         botonAgregar.click();
+    }
 
-        // Espera a que aparezca el modal de confirmación
-        wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("blockcart-modal")));
+    public void validarPopup() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        WebElement modal = wait.until(ExpectedConditions.visibilityOfElementLocated(PopupPage.cartModal));
+        WebElement titulo = modal.findElement(PopupPage.tituloModal);
+        assert titulo.getText().contains("Producto añadido correctamente");
+    }
 
-        // Clic en "Continuar comprando" o cierra el modal si existe
-        try {
-            WebElement continuar = driver.findElement(By.cssSelector("button.continue.btn.btn-secondary"));
-            continuar.click();
-        } catch (Exception e) {
-            System.out.println("El botón 'Continuar comprando' no se encontró, cerrando modal.");
-            driver.findElement(By.cssSelector("button.close")).click();
-        }
-    }*/
+    public void validarMontoTotalPopup(int cantidadEsperada) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        WebElement modal = wait.until(ExpectedConditions.visibilityOfElementLocated(PopupPage.cartModal));
+
+        String precioTexto = modal.findElement(PopupPage.precioUnitario).getText().replace("S/", "").replace(",", ".").trim();
+        String cantidadTexto = modal.findElement(PopupPage.cantidadProducto).getText().trim();
+        String totalTexto = modal.findElement(PopupPage.totalPopup).getText().replace("S/", "").replace(",", ".").trim();
+
+        double precioUnitario = Double.parseDouble(precioTexto);
+        int cantidadPopup = Integer.parseInt(cantidadTexto);
+        double totalPopup = Double.parseDouble(totalTexto);
+
+        double totalEsperado = precioUnitario * cantidadEsperada;
+        assert cantidadPopup == cantidadEsperada : "Cantidad no es correcta";
+        assert Math.abs(totalPopup - totalEsperado) < 0.01 : "Total no es correcto";
+    }
+
+    public void finalizarCompra() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        WebElement modal = wait.until(ExpectedConditions.visibilityOfElementLocated(PopupPage.cartModal));
+        WebElement botonFinalizar = modal.findElement(PopupPage.finalizarButton);
+        botonFinalizar.click();
+    }
 }
